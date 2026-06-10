@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinema Privado da Emy e do Digo 🍿</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212; color: white; text-align: center;
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
+        }
+        h1 { color: #e91e63; margin-bottom: 5px; }
+        .box { background: #1e1e1e; padding: 25px; border-radius: 12px; margin: 15px 0; max-width: 450px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        input { background: #333; color: white; border: 1px solid #555; padding: 12px; border-radius: 6px; width: 85%; text-align: center; font-size: 1rem; margin-bottom: 15px; }
+        button { background: linear-gradient(135deg, #9c27b0, #e91e63); color: white; border: none; padding: 12px 24px; border-radius: 25px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 90%; }
+        button:hover { transform: scale(1.03); opacity: 0.9; }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; }
+        video { width: 95%; max-width: 900px; border: 3px solid #e91e63; border-radius: 12px; background: black; margin-top: 20px; display: none; }
+        .status-tag { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; margin-top: 10px; display: block; }
+    </style>
+</head>
+<body>
+
+    <h1>Cinema Privado ❤️</h1>
+    <p>O espaço secreto do Rodrigo e da Emy</p>
+
+    <div class="box" id="painelRodrigo">
+        <h3>Painel do Rodrigo (Transmissão)</h3>
+        <input type="password" id="passRodrigo" placeholder="Insira a palavra-passe...">
+        <button id="btnCriar" onclick="criarSala()">1. Criar Sala</button>
+        <button id="btnPartilhar" onclick="iniciarTransmissao()" disabled style="margin-top: 10px;">2. Partilhar Ecrã</button>
+        <span id="statusRodrigo" class="status-tag">Aguardar criação...</span>
+    </div>
+
+    <div class="box" id="painelEmy">
+        <h3>Painel da Emy (Assistir)</h3>
+        <input type="password" id="passEmy" placeholder="Insira a palavra-passe...">
+        <button onclick="assistirCinema()">Entrar e Assistir</button>
+        <span id="statusEmy" class="status-tag"></span>
+    </div>
+
+    <video id="remoteVideo" autoplay controls playsinline></video>
+
+<script>
+    let streamEcra = null;
+    let peer = null;
+    const SALA_ID = "emy-e-digo-cinema-privado-2026"; // ID único
+    const PASS_CORRETA = "Emy&Digo";
+
+    // --- CÓDIGO DO RODRIGO ---
+    function criarSala() {
+        if (document.getElementById('passRodrigo').value !== PASS_CORRETA) {
+            return alert("Palavra-passe incorreta!");
+        }
+
+        document.getElementById('statusRodrigo').innerText = "A ligar à rede...";
+        peer = new Peer(SALA_ID);
+
+        peer.on('open', () => {
+            document.getElementById('statusRodrigo').innerText = "Sala Online! Clica em Partilhar Ecrã.";
+            document.getElementById('btnCriar').disabled = true;
+            document.getElementById('btnPartilhar').disabled = false;
+        });
+
+        peer.on('call', (call) => {
+            if (streamEcra) {
+                call.answer(streamEcra); // Atende a Emy com o ecrã partilhado
+            } else {
+                alert("A Emy está a tentar entrar, mas ainda não partilhaste o ecrã!");
+            }
+        });
+    }
+
+    async function iniciarTransmissao() {
+        try {
+            // Pede permissão para capturar ecrã e áudio
+            streamEcra = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: true 
+            });
+            document.getElementById('statusRodrigo').innerText = "Ecrã partilhado! A Emy já pode entrar.";
+            document.getElementById('painelRodrigo').style.background = "#1b5e20";
+        } catch (err) {
+            alert("Não foi possível partilhar o ecrã. Estás num servidor local (localhost) ou HTTPS?");
+        }
+    }
+
+    // --- CÓDIGO DA EMY ---
+    function assistirCinema() {
+        if (document.getElementById('passEmy').value !== PASS_CORRETA) {
+            return alert("Palavra-passe incorreta!");
+        }
+
+        document.getElementById('statusEmy').innerText = "A procurar a sala do Rodrigo...";
+        peer = new Peer(); // Cria um utilizador anónimo para a Emy
+
+        peer.on('open', () => {
+            // A Emy liga para o Rodrigo (SALA_ID) enviando uma stream vazia
+            const call = peer.call(SALA_ID, new MediaStream());
+            
+            call.on('stream', (remoteStream) => {
+                const videoElement = document.getElementById('remoteVideo');
+                videoElement.srcObject = remoteStream;
+                videoElement.style.display = "block";
+                
+                // Esconde os painéis para ficar só o filme
+                document.getElementById('painelRodrigo').style.display = "none";
+                document.getElementById('painelEmy').style.display = "none";
+            });
+        });
+
+        peer.on('error', (err) => {
+            alert("A sala do Rodrigo não está online. Ele já clicou em 'Criar Sala'?");
+            document.getElementById('statusEmy').innerText = "Erro na ligação.";
+        });
+    }
+</script>
+
+</body>
+</html>
