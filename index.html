@@ -19,6 +19,7 @@
         button:disabled { background: #555; cursor: not-allowed; transform: none; }
         video { width: 95%; max-width: 900px; border: 3px solid #e91e63; border-radius: 12px; background: black; margin-top: 20px; display: none; }
         .status-tag { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; margin-top: 10px; display: block; }
+        .code-display { background: #222; padding: 10px; border: 1px dashed #e91e63; display: none; margin-top: 10px; font-family: monospace; font-size: 1.2rem; color: #00ffcc; }
     </style>
 </head>
 <body>
@@ -30,6 +31,7 @@
         <h3>Painel do Rodrigo (Transmissão)</h3>
         <input type="password" id="passRodrigo" placeholder="Insira a palavra-passe...">
         <button id="btnCriar" onclick="criarSala()">1. Criar Sala</button>
+        <div id="codigoGerado" class="code-display"></div>
         <button id="btnPartilhar" onclick="iniciarTransmissao()" disabled style="margin-top: 10px;">2. Partilhar Ecrã</button>
         <span id="statusRodrigo" class="status-tag">Aguardar criação...</span>
     </div>
@@ -37,6 +39,7 @@
     <div class="box" id="painelEmy">
         <h3>Painel da Emy (Assistir)</h3>
         <input type="password" id="passEmy" placeholder="Insira a palavra-passe...">
+        <input type="text" id="salaIdInput" placeholder="Insira o Código da Sala do Rodrigo...">
         <button onclick="assistirCinema()">Entrar e Assistir</button>
         <span id="statusEmy" class="status-tag"></span>
     </div>
@@ -46,7 +49,7 @@
 <script>
     let streamEcra = null;
     let peer = null;
-    const SALA_ID = "emy-e-digo-cinema-privado-2026"; // ID único
+    let salaIdReal = "";
     const PASS_CORRETA = "Emy&Digo";
 
     // --- CÓDIGO DO RODRIGO ---
@@ -55,35 +58,48 @@
             return alert("Palavra-passe incorreta!");
         }
 
-        document.getElementById('statusRodrigo').innerText = "A ligar à rede...";
-        peer = new Peer(SALA_ID);
+        document.getElementById('statusRodrigo').innerText = "A gerar sala segura...";
+        
+        // Cria um ID aleatório para evitar conflitos no servidor público do PeerJS
+        salaIdReal = "cinema-" + Math.random().toString(36).substring(2, 9);
+        peer = new Peer(salaIdReal);
 
-        peer.on('open', () => {
-            document.getElementById('statusRodrigo').innerText = "Sala Online! Clica em Partilhar Ecrã.";
+        peer.on('open', (id) => {
+            document.getElementById('statusRodrigo').innerText = "Sala criada! Copia o código abaixo e clica em Partilhar Ecrã.";
+            
+            const boxCodigo = document.getElementById('codigoGerado');
+            boxCodigo.innerText = id;
+            boxCodigo.style.display = "block";
+            
             document.getElementById('btnCriar').disabled = true;
             document.getElementById('btnPartilhar').disabled = false;
         });
 
         peer.on('call', (call) => {
             if (streamEcra) {
-                call.answer(streamEcra); // Atende a Emy com o ecrã partilhado
+                call.answer(streamEcra);
+                document.getElementById('statusRodrigo').innerText = "A Emy entrou! Bom filme! 🍿";
             } else {
-                alert("A Emy está a tentar entrar, mas ainda não partilhaste o ecrã!");
+                alert("A Emy ligou-se, mas tu ainda não partilhaste o ecrã!");
             }
+        });
+
+        peer.on('error', (err) => {
+            document.getElementById('statusRodrigo').innerText = "Erro: " + err.type;
+            console.error(err);
         });
     }
 
     async function iniciarTransmissao() {
         try {
-            // Pede permissão para capturar ecrã e áudio
             streamEcra = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
                 audio: true 
             });
-            document.getElementById('statusRodrigo').innerText = "Ecrã partilhado! A Emy já pode entrar.";
+            document.getElementById('statusRodrigo').innerText = "Ecrã ativo! Envia o código à Emy para ela entrar.";
             document.getElementById('painelRodrigo').style.background = "#1b5e20";
         } catch (err) {
-            alert("Não foi possível partilhar o ecrã. Estás num servidor local (localhost) ou HTTPS?");
+            alert("Erro ao capturar ecrã. Garante que dás permissão no navegador.");
         }
     }
 
@@ -93,27 +109,36 @@
             return alert("Palavra-passe incorreta!");
         }
 
-        document.getElementById('statusEmy').innerText = "A procurar a sala do Rodrigo...";
-        peer = new Peer(); // Cria um utilizador anónimo para a Emy
+        const codigoDigitado = document.getElementById('salaIdInput').value.trim();
+        if (!codigoDigitado) {
+            return alert("Insere o código da sala que o Rodrigo te enviou!");
+        }
+
+        document.getElementById('statusEmy').innerText = "A conectar diretamente ao Rodrigo...";
+        peer = new Peer(); 
 
         peer.on('open', () => {
-            // A Emy liga para o Rodrigo (SALA_ID) enviando uma stream vazia
-            const call = peer.call(SALA_ID, new MediaStream());
+            // Liga para o código que tu geraste
+            const call = peer.call(codigoDigitado, new MediaStream());
             
+            // Define um tempo limite se não receber imagem em 10 segundos
+            let timeout = setTimeout(() => {
+                document.getElementById('statusEmy').innerText = "Sem resposta do Rodrigo. Ele já partilhou o ecrã?";
+            }, 10000);
+
             call.on('stream', (remoteStream) => {
+                clearTimeout(timeout);
                 const videoElement = document.getElementById('remoteVideo');
                 videoElement.srcObject = remoteStream;
                 videoElement.style.display = "block";
                 
-                // Esconde os painéis para ficar só o filme
                 document.getElementById('painelRodrigo').style.display = "none";
                 document.getElementById('painelEmy').style.display = "none";
             });
         });
 
         peer.on('error', (err) => {
-            alert("A sala do Rodrigo não está online. Ele já clicou em 'Criar Sala'?");
-            document.getElementById('statusEmy').innerText = "Erro na ligação.";
+            document.getElementById('statusEmy').innerText = "Erro ao ligar. Verifica o código.";
         });
     }
 </script>
