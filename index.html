@@ -12,6 +12,7 @@
         button { background: #e50914; color: white; cursor: pointer; font-weight: bold; }
         button:hover { background: #f40612; }
         video { width: 100%; max-width: 800px; background: black; border-radius: 10px; margin-top: 20px; }
+        .status-msg { font-size: 14px; color: #ffc107; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -29,7 +30,7 @@
         <input type="password" id="criar-senha" placeholder="Senha da sala (ex: 123)">
         <button onclick="criarSala()">Iniciar Transmissão</button>
         <button onclick="mostrarTela('menu')" style="background: #555;">Voltar</button>
-        <p id="status-host"></p>
+        <p id="status-host" class="status-msg"></p>
     </div>
 
     <div id="entrar" class="tela">
@@ -38,13 +39,14 @@
         <input type="password" id="entrar-senha" placeholder="Senha da sala">
         <button onclick="entrarSala()">Conectar</button>
         <button onclick="mostrarTela('menu')" style="background: #555;">Voltar</button>
-        <p id="status-viewer"></p>
+        <p id="status-viewer" class="status-msg"></p>
     </div>
 
     <div id="cinema" class="tela" style="max-width: 800px;">
         <h3 id="titulo-cinema">Carregando...</h3>
-        <video id="videoPlayer" autoplay playsinline controls muted></video>
-        <p style="font-size: 12px; color: #aaa;">Se estiver sem som, ative o volume no player do vídeo.</p>
+        <video id="videoPlayer" autoplay playsinline controls muted style="width:100%;"></video>
+        <p style="font-size: 12px; color: #aaa; margin-top: 10px;">Se estiver sem som, clique no player e ative o volume.</p>
+        <button onclick="location.reload()" style="background: #555; width: auto; display: inline-block;">Sair da Sala</button>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -59,7 +61,8 @@
         }
 
         function gerarIdDaSala(nome, senha) {
-            return "cine-" + nome.toLowerCase().trim() + "-" + senha.trim();
+            // Remove espaços e caracteres especiais para evitar erros no servidor de ID
+            return "cine-" + nome.toLowerCase().replace(/[^a-z0-9]/g, "") + "-" + senha.trim();
         }
 
         async function criarSala() {
@@ -78,9 +81,15 @@
                     audio: true 
                 });
 
-                peer = new Peer(salaId);
+                status.innerText = "Criando sala na nuvem...";
+                
+                // Configuração detalhada para evitar bloqueios de NAT/Rede
+                peer = new Peer(salaId, {
+                    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]}
+                });
 
                 peer.on('open', (id) => {
+                    status.innerText = "";
                     mostrarTela('cinema');
                     document.getElementById('titulo-cinema').innerText = "Transmissão da Sala: " + nome;
                     const videoElement = document.getElementById('videoPlayer');
@@ -89,12 +98,16 @@
                 });
 
                 peer.on('call', (chamada) => {
-                    console.log("Novo espectador conectado!");
+                    console.log("Novo espectador tentando conectar...");
+                    // Responde enviando o vídeo atual
                     chamada.answer(streamDeVideo); 
                 });
 
+                peer.on('error', (err) => {
+                    status.innerText = "Erro no servidor: " + err.type;
+                });
+
                 streamDeVideo.getVideoTracks()[0].onended = () => {
-                    alert("Transmissão encerrada.");
                     location.reload();
                 };
 
@@ -112,23 +125,41 @@
             if(!nome || !senha) return alert("Preencha o nome e a senha!");
 
             const salaId = gerarIdDaSala(nome, senha);
-            status.innerText = "Conectando...";
+            status.innerText = "Conectando ao servidor público...";
 
-            peer = new Peer();
+            // Configuração idêntica para o cliente conseguir furar o bloqueio do telemóvel
+            peer = new Peer({
+                config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]}
+            });
 
             peer.on('open', (id) => {
-                // Correção aqui: usando 'chamada' de forma consistente
+                status.innerText = "Buscando a sala do seu amigo...";
+                
+                // Faz a chamada para o ID da sala criada pelo PC
                 const chamada = peer.call(salaId);
 
+                // Define um timeout se a sala demorar muito para responder
+                const timeout = setTimeout(() => {
+                    if (status.innerText.includes("Buscando")) {
+                        status.innerText = "A sala demorou a responder. Verifique se o PC já iniciou a transmissão.";
+                    }
+                }, 10000);
+
                 chamada.on('stream', (streamRemoto) => {
+                    clearTimeout(timeout);
+                    status.innerText = "";
                     mostrarTela('cinema');
                     document.getElementById('titulo-cinema').innerText = "Assistindo Sala: " + nome;
+                    
                     const videoElement = document.getElementById('videoPlayer');
                     videoElement.srcObject = streamRemoto;
                     
-                    videoElement.play().catch(e => {
-                        console.log("Play automático bloqueado. Clique no player.");
-                    });
+                    // Força o play no telemóvel
+                    setTimeout(() => {
+                        videoElement.play().catch(e => {
+                            status.innerText = "Clique no botão Play do vídeo para iniciar o filme!";
+                        });
+                    }, 500);
                 });
 
                 chamada.on('close', () => {
@@ -138,10 +169,11 @@
             });
 
             peer.on('error', (err) => {
+                console.error(err);
                 if(err.type === 'peer-unavailable') {
-                    status.innerText = "Sala não encontrada ou senha incorreta!";
+                    status.innerText = "Sala não encontrada! Verifique o nome e a senha.";
                 } else {
-                    status.innerText = "Erro ao conectar.";
+                    status.innerText = "Erro de conexão: " + err.type;
                 }
             });
         }
