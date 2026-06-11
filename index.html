@@ -13,6 +13,9 @@
         button:hover { background: #f40612; }
         video { width: 100%; max-width: 800px; background: black; border-radius: 10px; margin-top: 20px; }
         .status-msg { font-size: 14px; color: #ffc107; margin-top: 10px; font-weight: bold; }
+        
+        /* Painel de Diagnóstico Visível */
+        #painel-debug { max-width: 500px; margin: 30px auto; padding: 15px; background: #000; border: 1px solid #444; border-radius: 5px; text-align: left; font-family: monospace; font-size: 12px; color: #00ff00; overflow-y: auto; max-height: 180px; }
     </style>
 </head>
 <body>
@@ -49,19 +52,23 @@
         <button onclick="location.reload()" style="background: #555; width: auto; display: inline-block;">Sair da Sala</button>
     </div>
 
+    <div id="painel-debug">
+        <strong>Status do Sistema:</strong>
+        <div id="log-conteudo">Aguardando ação...</div>
+    </div>
+
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
         let peer;
         let streamDeVideo;
 
-        // Configuração com servidores TURN gratuitos para furar o bloqueio do 4G/redes diferentes
+        // Servidores de conexão global públicos e estáveis
         const configWebRTC = {
             config: {
                 'iceServers': [
                     { 'urls': 'stun:stun.l.google.com:19302' },
                     { 'urls': 'stun:stun1.l.google.com:19302' },
-                    // Servidores TURN públicos da OpenRelay para fazer a ponte se o 4G bloquear
                     {
                         'urls': 'turn:openrelay.metered.ca:80',
                         'username': 'openrelayproject',
@@ -76,13 +83,19 @@
             }
         };
 
+        function depurar(texto) {
+            const log = document.getElementById('log-conteudo');
+            log.innerHTML += "<br>➔ " + texto;
+            console.log(texto);
+        }
+
         function mostrarTela(id) {
             document.querySelectorAll('.tela').forEach(t => t.classList.remove('ativa'));
             document.getElementById(id).classList.add('ativa');
         }
 
         function gerarIdDaSala(nome, senha) {
-            return "cine-" + nome.toLowerCase().replace(/[^a-z0-9]/g, "") + "-" + senha.trim();
+            return "cine-" + nome.toLowerCase().replace(/[^a-z0-9]/g, "") + "-" + senha.toLowerCase().replace(/[^a-z0-9]/g, "");
         }
 
         async function criarSala() {
@@ -96,41 +109,39 @@
             status.innerText = "Pedindo permissão de tela...";
 
             try {
-                streamDeVideo = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: true, 
-                    audio: true 
-                });
-
-                status.innerText = "Criando sala de longa distância...";
+                streamDeVideo = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                depurar("Ecrã capturado com sucesso no PC.");
+                status.innerText = "Conectando ao servidor...";
                 
-                // Iniciando o Peer com a nova configuração de servidores externos
                 peer = new Peer(salaId, configWebRTC);
 
                 peer.on('open', (id) => {
+                    depurar("PC Online! Sala registada com ID: " + id);
                     status.innerText = "";
                     mostrarTela('cinema');
                     document.getElementById('titulo-cinema').innerText = "Transmissão da Sala: " + nome;
-                    const videoElement = document.getElementById('videoPlayer');
-                    videoElement.srcObject = streamDeVideo;
-                    videoElement.muted = true; 
+                    document.getElementById('videoPlayer').srcObject = streamDeVideo;
                 });
 
-                peer.on('call', (chamada) => {
-                    console.log("Amigo a tentar conectar de longe...");
-                    chamada.answer(streamDeVideo); 
+                // Nova Lógica: O PC aguarda o amigo conectar via dados
+                peer.on('connection', (conn) => {
+                    depurar("Um amigo entrou na sala! Enviando sinal de vídeo para ele...");
+                    
+                    // O PC faz a chamada de vídeo diretamente para o ID do amigo
+                    setTimeout(() => {
+                        peer.call(conn.peer, streamDeVideo);
+                        depurar("Transmissão enviada para o ID: " + conn.peer);
+                    }, 800);
                 });
 
                 peer.on('error', (err) => {
-                    status.innerText = "Erro: " + err.type;
+                    depurar("ERRO NO PC: " + err.type);
                 });
 
-                streamDeVideo.getVideoTracks()[0].onended = () => {
-                    location.reload();
-                };
+                streamDeVideo.getVideoTracks()[0].onended = () => location.reload();
 
             } catch (err) {
-                status.innerText = "Erro: " + err.message;
-                console.error(err);
+                depurar("Erro ao iniciar espelhamento: " + err.message);
             }
         }
 
@@ -142,50 +153,43 @@
             if(!nome || !senha) return alert("Preencha o nome e a senha!");
 
             const salaId = gerarIdDaSala(nome, senha);
-            status.innerText = "Conectando via túnel seguro...";
+            status.innerText = "Conectando...";
 
-            // Criando o cliente também com acesso aos servidores TURN
             peer = new Peer(configWebRTC);
 
             peer.on('open', (id) => {
-                status.innerText = "A procurar a sala do teu amigo...";
+                depurar("Telemóvel Online. O meu ID único é: " + id);
+                depurar("A abrir túnel de dados para a sala...");
                 
-                const chamada = peer.call(salaId);
+                // Conecta via canal de dados (estável e sem bloqueios)
+                const conn = peer.connect(salaId);
+                
+                conn.on('open', () => {
+                    status.innerText = "Conectado! A aguardar que o PC envie o vídeo...";
+                    depurar("Túnel de dados aberto. Aguardando chamada do PC...");
+                });
+            });
 
-                const timeout = setTimeout(() => {
-                    if (status.innerText.includes("procurar")) {
-                        status.innerText = "Não conseguimos encontrar. Garante que o PC já iniciou a transmissão com o mesmo nome/senha!";
-                    }
-                }, 12000);
+            // O telemóvel fica à espera de receber a chamada vinda do PC
+            peer.on('call', (chamada) => {
+                depurar("PC a ligar para nós! A aceitar transmissão...");
+                chamada.answer(); // Aceita o vídeo do PC sem enviar nada de volta
 
                 chamada.on('stream', (streamRemoto) => {
-                    clearTimeout(timeout);
+                    depurar("Vídeo recebido com sucesso!");
                     status.innerText = "";
                     mostrarTela('cinema');
                     document.getElementById('titulo-cinema').innerText = "Assistindo Sala: " + nome;
                     
                     const videoElement = document.getElementById('videoPlayer');
                     videoElement.srcObject = streamRemoto;
-                    
-                    setTimeout(() => {
-                        videoElement.play().catch(e => {
-                            status.innerText = "Clica no botão Play do vídeo para iniciar o ecrã!";
-                        });
-                    }, 500);
-                });
-
-                chamada.on('close', () => {
-                    alert("A transmissão acabou.");
-                    location.reload();
                 });
             });
 
             peer.on('error', (err) => {
-                console.error(err);
+                depurar("ERRO NO CLIENTE: " + err.type);
                 if(err.type === 'peer-unavailable') {
                     status.innerText = "Sala não encontrada! Confirma se o PC já ativou a sala.";
-                } else {
-                    status.innerText = "Erro de rede: " + err.type;
                 }
             });
         }
