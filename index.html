@@ -21,23 +21,26 @@
         button { background: #e50914; color: white; cursor: pointer; font-weight: bold; transition: 0.2s; margin-top: 10px; }
         button:hover { background: #f40612; transform: scale(1.02); }
         button:disabled { background: #555 !important; cursor: not-allowed; transform: none !important; }
-        /* Customização da Área de Transmissão Ativa (Igual à tua Print) */
+        /* Customização da Área de Transmissão Ativa */
         #cinema { max-width: 900px !important; width: 100%; background: #1a1a1a; border: 1px solid #333; }
         .header-cinema { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
         .viewer-badge { background: #e50914; padding: 5px 14px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
         video { width: 100%; background: black; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
         
-        /* Painel Administrativo de Gestão (Kick/Ban) */
-        .painel-controle-host { display: none; margin: 20px auto 10px auto; background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; text-align: left; width: 100%; box-sizing: border-box; }
+        /* Painéis Administrativos de Gestão (Kick, Ban e Desban) */
+        .painel-controle-host { display: none; margin: 15px auto 5px auto; background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; text-align: left; width: 100%; box-sizing: border-box; }
         .painel-controle-host h4 { color: #e50914; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
         .lista-usuarios { display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; }
         .usuario-linha { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 8px 12px; border-radius: 6px; border: 1px solid #333; }
         .usuario-nome { font-size: 14px; font-weight: bold; color: #fff; }
         .botoes-acao { display: flex; gap: 8px; }
+        
         .btn-kick { background: #ff9500; font-size: 12px; padding: 6px 12px; margin: 0; width: auto; font-weight: bold; border-radius: 4px; }
         .btn-kick:hover { background: #ffaa22; }
         .btn-ban { background: #ff3b30; font-size: 12px; padding: 6px 12px; margin: 0; width: auto; font-weight: bold; border-radius: 4px; }
         .btn-ban:hover { background: #ff453a; }
+        .btn-unban { background: #2ecc71; font-size: 12px; padding: 6px 12px; margin: 0; width: auto; font-weight: bold; border-radius: 4px; }
+        .btn-unban:hover { background: #27ae60; }
         
         .status-msg { font-size: 14px; color: #ffc107; margin-top: 10px; font-weight: bold; }
         #painel-debug { max-width: 900px; width: 100%; margin: 20px auto; padding: 15px; background: #000; border: 1px solid #333; border-radius: 6px; text-align: left; font-family: monospace; font-size: 12px; color: #00ff00; overflow-y: auto; max-height: 120px; box-sizing: border-box; }
@@ -102,6 +105,13 @@
             </div>
         </div>
 
+        <div id="painelBanidos" class="painel-controle-host" style="border-color: #ff3b30;">
+            <h4 style="color: #ff3b30;">Lista de Dispositivos Banidos</h4>
+            <div id="listaControleBanidos" class="lista-usuarios">
+                <div style="color: #666; font-size: 13px; text-align: center; padding: 10px;">Nenhum dispositivo banido no histórico.</div>
+            </div>
+        </div>
+
         <button onclick="location.reload()" style="background: #444; width: auto; display: inline-block; margin-top: 15px; padding: 8px 20px;">Sair da Sala</button>
     </div>
 
@@ -124,8 +134,8 @@
             localStorage.setItem('cineteca_fingerprint', meuIdDispositivo);
         }
 
-        // Lista de dispositivos banidos salva localmente no PC do criador
-        let listaNegraBanidos = JSON.parse(localStorage.getItem('cineteca_blacklist') || '[]');
+        // Lista de dispositivos banidos salva localmente no PC do criador [guarda objetos {id, nome}]
+        let listaNegraBanidos = JSON.parse(localStorage.getItem('cineteca_blacklist_v2') || '[]');
 
         const configWebRTC = {
             config: {
@@ -188,17 +198,21 @@
                     status.innerText = "";
                     mostrarTela('cinema');
                     
-                    // CORRIGIDO: Torna o painel visível apenas para o Host dono da sala
+                    // Ativa e exibe os painéis administrativos apenas para o Host
                     document.getElementById('painelGerenciamento').style.display = "block"; 
+                    document.getElementById('painelBanidos').style.display = "block"; 
                     
                     document.getElementById('titulo-cinema').innerText = "Transmissão da Sala: " + nome;
                     document.getElementById('videoPlayer').srcObject = streamDeVideo;
+                    atualizarPainelBanidosVisual(); // Desenha os banidos guardados na memória
                 });
 
                 peer.on('connection', (conn) => {
                     conn.on('data', (dados) => {
                         if (dados.type === 'entrar_sala') {
-                            if (listaNegraBanidos.includes(dados.deviceId)) {
+                            // Verifica se o id único do dispositivo consta nos banidos
+                            let banido = listaNegraBanidos.find(b => b.id === dados.deviceId);
+                            if (banido) {
                                 conn.send({ type: 'resultado_ban' });
                                 setTimeout(() => conn.close(), 300);
                                 return;
@@ -241,7 +255,7 @@
                         if (sender.track && sender.track.kind === 'video') {
                             const parametros = sender.getParameters();
                             if (!parametros.encodings) parametros.encodings = [{}];
-                            parametros.encodings[0].maxBitrate = 1200000; // Estabiliza em 1.2 Mbps
+                            parametros.encodings[0].maxBitrate = 1200000;
                             sender.setParameters(parametros).catch(e => console.log('Bitrate OK'));
                         }
                     });
@@ -250,7 +264,7 @@
             setTimeout(() => clearInterval(ajusteBanda), 10000);
         }
 
-        // --- SISTEMA DE ATUALIZAÇÃO DO PAINEL DE KICK/BAN ---
+        // --- SISTEMA DE GESTÃO E INTERFACE (KICK, BAN, DESBAN) ---
         function vincularMembroLista(peerId, username, deviceId, dataConn, callObj) {
             let membro = conexoesClientes.find(c => c.peerId === peerId);
             if (!membro) {
@@ -274,12 +288,10 @@
             const contagemTotal = conexoesClientes.length;
             document.getElementById('contador-membros').innerText = contagemTotal;
 
-            // Envia a contagem exata para todos os viewers em tempo real
             conexoesClientes.forEach(m => {
                 if (m.dataConn && m.dataConn.open) m.dataConn.send({ type: 'sinc_contagem', total: contagemTotal });
             });
 
-            // Altera visualmente a lista que aparece por baixo do vídeo do PC administrador
             const container = document.getElementById('listaControleUsuarios');
             if (contagemTotal === 0) {
                 container.innerHTML = '<div style="color: #666; font-size: 13px; text-align: center; padding: 10px;">Nenhum espetador conectado de momento.</div>';
@@ -294,7 +306,7 @@
                     <span class="usuario-nome">👤 ${m.username}</span>
                     <div class="botoes-acao">
                         <button class="btn-kick" onclick="darKick('${m.peerId}')">Kick</button>
-                        <button class="btn-ban" onclick="darBan('${m.peerId}', '${m.deviceId}')">Ban</button>
+                        <button class="btn-ban" onclick="darBan('${m.peerId}', '${m.deviceId}', '${m.username}')">Ban</button>
                     </div>
                 `;
                 container.appendChild(item);
@@ -313,13 +325,44 @@
             }
         }
 
-        function darBan(peerId, deviceId) {
-            if (deviceId && !listaNegraBanidos.includes(deviceId)) {
-                listaNegraBanidos.push(deviceId);
-                localStorage.setItem('cineteca_blacklist', JSON.stringify(listaNegraBanidos));
+        function darBan(peerId, deviceId, username) {
+            if (deviceId && !listaNegraBanidos.some(b => b.id === deviceId)) {
+                listaNegraBanidos.push({ id: deviceId, nome: username });
+                localStorage.setItem('cineteca_blacklist_v2', JSON.stringify(listaNegraBanidos));
+                atualizarPainelBanidosVisual();
             }
             darKick(peerId);
-            depurar("Aparelho banido com sucesso.");
+            depurar(`Aparelho de "${username}" foi banido da sala.`);
+        }
+
+        // Nova Função Administrativa: Constrói dinamicamente e atualiza a lista de banidos para remoção
+        function atualizarPainelBanidosVisual() {
+            const containerBanidos = document.getElementById('listaControleBanidos');
+            if (listaNegraBanidos.length === 0) {
+                containerBanidos.innerHTML = '<div style="color: #666; font-size: 13px; text-align: center; padding: 10px;">Nenhum dispositivo banido no histórico.</div>';
+                return;
+            }
+
+            containerBanidos.innerHTML = '';
+            listaNegraBanidos.forEach(b => {
+                const item = document.createElement('div');
+                item.className = 'usuario-linha';
+                item.style.borderColor = '#442222';
+                item.innerHTML = `
+                    <span class="usuario-nome" style="color: #ff8888;">🚫 ${b.nome}</span>
+                    <div class="botoes-acao">
+                        <button class="btn-unban" onclick="darDesban('${b.id}')">Desbanir</button>
+                    </div>
+                `;
+                containerBanidos.appendChild(item);
+            });
+        }
+
+        function darDesban(deviceId) {
+            listaNegraBanidos = listaNegraBanidos.filter(b => b.id !== deviceId);
+            localStorage.setItem('cineteca_blacklist_v2', JSON.stringify(listaNegraBanidos));
+            atualizarPainelBanidosVisual();
+            depurar("Dispositivo desbanido! Já pode voltar a reconectar-se.");
         }
 
         // --- CÓDIGO DO CLIENTE (ESPETADOR) ---
