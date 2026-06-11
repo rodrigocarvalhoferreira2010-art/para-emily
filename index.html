@@ -1,147 +1,109 @@
-<!DOCTYPE html>
-<html lang="pt-PT">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cinema Privado da Emy e do Digo 🍿</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #121212; color: white; text-align: center;
-            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
-        }
-        h1 { color: #e91e63; margin-bottom: 5px; }
-        .box { background: #1e1e1e; padding: 25px; border-radius: 12px; margin: 15px 0; max-width: 450px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        input { background: #333; color: white; border: 1px solid #555; padding: 12px; border-radius: 6px; width: 85%; text-align: center; font-size: 1rem; margin-bottom: 15px; }
-        button { background: linear-gradient(135deg, #9c27b0, #e91e63); color: white; border: none; padding: 12px 24px; border-radius: 25px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 90%; }
-        button:hover { transform: scale(1.03); opacity: 0.9; }
-        button:disabled { background: #555; cursor: not-allowed; transform: none; }
-        video { width: 95%; max-width: 900px; border: 3px solid #e91e63; border-radius: 12px; background: black; margin-top: 20px; display: none; }
-        .status-tag { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; margin-top: 10px; display: block; }
-        .code-display { background: #222; padding: 10px; border: 1px dashed #e91e63; display: none; margin-top: 10px; font-family: monospace; font-size: 1.2rem; color: #00ffcc; }
-    </style>
-</head>
-<body>
+let peer;
+let streamDeVideo;
 
-    <h1>Cinema Privado ❤️</h1>
-    <p>O espaço secreto do Rodrigo e da Emy</p>
+function mostrarTela(id) {
+    document.querySelectorAll('.tela').forEach(t => t.classList.remove('ativa'));
+    document.getElementById(id).classList.add('ativa');
+}
 
-    <div class="box" id="painelRodrigo">
-        <h3>Painel do Rodrigo (Transmissão)</h3>
-        <input type="password" id="passRodrigo" placeholder="Insira a palavra-passe...">
-        <button id="btnCriar" onclick="criarSala()">1. Criar Sala</button>
-        <div id="codigoGerado" class="code-display"></div>
-        <button id="btnPartilhar" onclick="iniciarTransmissao()" disabled style="margin-top: 10px;">2. Partilhar Ecrã</button>
-        <span id="statusRodrigo" class="status-tag">Aguardar criação...</span>
-    </div>
+// Cria um "Código Único" juntando o nome e a senha
+function gerarIdDaSala(nome, senha) {
+    return "cine-" + nome.toLowerCase().trim() + "-" + senha.trim();
+}
 
-    <div class="box" id="painelEmy">
-        <h3>Painel da Emy (Assistir)</h3>
-        <input type="password" id="passEmy" placeholder="Insira a palavra-passe...">
-        <input type="text" id="salaIdInput" placeholder="Insira o Código da Sala do Rodrigo...">
-        <button onclick="assistirCinema()">Entrar e Assistir</button>
-        <span id="statusEmy" class="status-tag"></span>
-    </div>
+// ----------------------------------------------------
+// LÓGICA DO HOST (QUEM CRIA A SALA E COMPARTILHA A TELA)
+// ----------------------------------------------------
+async function criarSala() {
+    const nome = document.getElementById('criar-nome').value;
+    const senha = document.getElementById('criar-senha').value;
+    const status = document.getElementById('status-host');
+    
+    if(!nome || !senha) return alert("Preencha o nome e a senha!");
 
-    <video id="remoteVideo" autoplay controls playsinline></video>
+    const salaId = gerarIdDaSala(nome, senha);
+    status.innerText = "Pedindo permissão de tela...";
 
-<script>
-    let streamEcra = null;
-    let peer = null;
-    let salaIdReal = "";
-    const PASS_CORRETA = "Emy&Digo";
+    try {
+        // Pede a tela para o usuário (funciona no PC)
+        streamDeVideo = await navigator.mediaDevices.getDisplayMedia({ 
+            video: true, 
+            audio: true // IMPORTANTE: ao escolher a tela, o usuário deve marcar "Compartilhar áudio do sistema"
+        });
 
-    // --- CÓDIGO DO RODRIGO ---
-    function criarSala() {
-        if (document.getElementById('passRodrigo').value !== PASS_CORRETA) {
-            return alert("Palavra-passe incorreta!");
-        }
-
-        document.getElementById('statusRodrigo').innerText = "A gerar sala segura...";
-        
-        // Cria um ID aleatório para evitar conflitos no servidor público do PeerJS
-        salaIdReal = "cinema-" + Math.random().toString(36).substring(2, 9);
-        peer = new Peer(salaIdReal);
+        // Cria o peer na nuvem com o ID exato da sala e senha
+        peer = new Peer(salaId);
 
         peer.on('open', (id) => {
-            document.getElementById('statusRodrigo').innerText = "Sala criada! Copia o código abaixo e clica em Partilhar Ecrã.";
-            
-            const boxCodigo = document.getElementById('codigoGerado');
-            boxCodigo.innerText = id;
-            boxCodigo.style.display = "block";
-            
-            document.getElementById('btnCriar').disabled = true;
-            document.getElementById('btnPartilhar').disabled = false;
+            mostrarTela('cinema');
+            document.getElementById('titulo-cinema').innerText = "Transmissão da Sala: " + nome;
+            const videoElement = document.getElementById('videoPlayer');
+            videoElement.srcObject = streamDeVideo;
+            videoElement.muted = true; // O Host não precisa ouvir a si mesmo
         });
 
-        peer.on('call', (call) => {
-            if (streamEcra) {
-                call.answer(streamEcra);
-                document.getElementById('statusRodrigo').innerText = "A Emy entrou! Bom filme! 🍿";
-            } else {
-                alert("A Emy ligou-se, mas tu ainda não partilhaste o ecrã!");
-            }
+        // Quando alguém (Mobile) entrar, o Host atende a chamada e envia a tela
+        peer.on('call', (chamada) => {
+            console.log("Novo espectador conectado!");
+            chamada.answer(streamDeVideo); // Envia o filme!
         });
 
-        peer.on('error', (err) => {
-            document.getElementById('statusRodrigo').innerText = "Erro: " + err.type;
-            console.error(err);
-        });
+        // Se a transmissão parar
+        streamDeVideo.getVideoTracks()[0].onended = () => {
+            alert("Transmissão encerrada.");
+            location.reload();
+        };
+
+    } catch (err) {
+        status.innerText = "Erro: " + err.message;
+        console.error(err);
     }
+}
 
-    async function iniciarTransmissao() {
-        try {
-            streamEcra = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: true 
-            });
-            document.getElementById('statusRodrigo').innerText = "Ecrã ativo! Envia o código à Emy para ela entrar.";
-            document.getElementById('painelRodrigo').style.background = "#1b5e20";
-        } catch (err) {
-            alert("Erro ao capturar ecrã. Garante que dás permissão no navegador.");
-        }
-    }
+// ----------------------------------------------------
+// LÓGICA DO ESPECTADOR (QUEM VAI ASSISTIR NO MOBILE/PC)
+// ----------------------------------------------------
+function entrarSala() {
+    const nome = document.getElementById('entrar-nome').value;
+    const senha = document.getElementById('entrar-senha').value;
+    const status = document.getElementById('status-viewer');
+    
+    if(!nome || !senha) return alert("Preencha o nome e a senha!");
 
-    // --- CÓDIGO DA EMY ---
-    function assistirCinema() {
-        if (document.getElementById('passEmy').value !== PASS_CORRETA) {
-            return alert("Palavra-passe incorreta!");
-        }
+    const salaId = gerarIdDaSala(nome, senha);
+    status.innerText = "Conectando...";
 
-        const codigoDigitado = document.getElementById('salaIdInput').value.trim();
-        if (!codigoDigitado) {
-            return alert("Insere o código da sala que o Rodrigo te enviou!");
-        }
+    // Cria um peer sem ID (ID aleatório para quem assiste)
+    peer = new Peer();
 
-        document.getElementById('statusEmy').innerText = "A conectar diretamente ao Rodrigo...";
-        peer = new Peer(); 
+    peer.on('open', (id) => {
+        // Liga para o Host usando o ID da sala
+        const chamada = peer.call(salaId);
 
-        peer.on('open', () => {
-            // Liga para o código que tu geraste
-            const call = peer.call(codigoDigitado, new MediaStream());
+        chamada.on('stream', (streamRemoto) => {
+            // Recebeu o vídeo!
+            mostrarTela('cinema');
+            document.getElementById('titulo-cinema').innerText = "Assistindo Sala: " + nome;
+            const videoElement = document.getElementById('videoPlayer');
+            videoElement.srcObject = streamRemoto;
             
-            // Define um tempo limite se não receber imagem em 10 segundos
-            let timeout = setTimeout(() => {
-                document.getElementById('statusEmy').innerText = "Sem resposta do Rodrigo. Ele já partilhou o ecrã?";
-            }, 10000);
-
-            call.on('stream', (remoteStream) => {
-                clearTimeout(timeout);
-                const videoElement = document.getElementById('remoteVideo');
-                videoElement.srcObject = remoteStream;
-                videoElement.style.display = "block";
-                
-                document.getElementById('painelRodrigo').style.display = "none";
-                document.getElementById('painelEmy').style.display = "none";
+            // Tenta dar play automaticamente
+            videoElement.play().catch(e => {
+                console.log("Play automático bloqueado. O usuário precisa clicar no player.");
             });
         });
 
-        peer.on('error', (err) => {
-            document.getElementById('statusEmy').innerText = "Erro ao ligar. Verifica o código.";
+        chamada.on('close', () => {
+            alert("A transmissão acabou.");
+            location.reload();
         });
-    }
-</script>
+    });
 
-</body>
-</html>
+    peer.on('error', (err) => {
+        if(err.type === 'peer-unavailable') {
+            status.innerText = "Sala não encontrada ou senha incorreta!";
+        } else {
+            status.innerText = "Erro ao conectar.";
+        }
+    });
+}
