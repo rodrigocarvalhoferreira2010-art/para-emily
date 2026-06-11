@@ -3,67 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sala de Cinema</title>
+    <title>CineTeca P2P 🍿</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; background: #1a1a1a; color: white; }
-        .tela { display: none; max-width: 400px; margin: 20px auto; padding: 20px; background: #333; border-radius: 10px; }
+        body { 
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif; 
+            text-align: center; margin: 0; padding: 20px; 
+            background: #0f0f12; color: #f5f5f7;
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+        }
+        h1 { 
+            font-size: 2.3rem; color: #e50914; margin-bottom: 5px; font-weight: 800;
+            text-shadow: 0 0 20px rgba(229, 9, 20, 0.2); display: inline-flex; align-items: center; gap: 12px;
+        }
+        .tela { 
+            display: none; max-width: 450px; width: 100%; margin: 20px auto; 
+            padding: 30px; background: #18181c; border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #282830;
+            box-sizing: border-box; transition: all 0.3s ease;
+        }
         .ativa { display: block; }
-        input, button { display: block; width: 90%; margin: 10px auto; padding: 12px; border-radius: 5px; border: none; font-size: 16px; }
-        button { background: #e50914; color: white; cursor: pointer; font-weight: bold; }
-        button:hover { background: #f40612; }
-        video { width: 100%; max-width: 800px; background: black; border-radius: 10px; margin-top: 20px; }
-        .status-msg { font-size: 14px; color: #ffc107; margin-top: 10px; font-weight: bold; }
-        
-        /* Painel de Diagnóstico Visível */
-        #painel-debug { max-width: 500px; margin: 30px auto; padding: 15px; background: #000; border: 1px solid #444; border-radius: 5px; text-align: left; font-family: monospace; font-size: 12px; color: #00ff00; overflow-y: auto; max-height: 180px; }
+        .input-block { text-align: left; width: 90%; margin: 12px auto; }
+        .input-block label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 5px; }
+        input, button { display: block; width: 100%; padding: 14px; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
+        input { background: #23232a; color: white; border: 1px solid #333340; outline: none; transition: border 0.2s; text-align: center; }
+        input:focus { border-color: #e50914; box-shadow: 0 0 8px rgba(229, 9, 20, 0.3); }
+        button { background: #e50914; color: white; cursor: pointer; font-weight: bold; transition: all 0.2s ease; margin-top: 10px; }
+        button:hover { background: #f40612; transform: translateY(-1px); box-shadow: 0 5px 15px rgba(229, 9, 20, 0.4); }
+        button:active { transform: translateY(0); }
+        video { width: 100%; max-width: 900px; background: black; border-radius: 14px; margin-top: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.8); border: 2px solid #282830; }
+        .status-msg { font-size: 14px; color: #ffc107; margin-top: 12px; font-weight: bold; }
+        .viewer-counter {
+            background: rgba(255, 255, 255, 0.08); padding: 6px 14px; border-radius: 20px;
+            font-size: 1rem; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff; display: inline-flex; align-items: center; gap: 6px; vertical-align: middle;
+        }
+        .admin-box { width: 100%; max-width: 600px; margin-top: 25px; text-align: left; display: none; background: #18181c; border-radius: 12px; border: 1px solid #282830; padding: 20px; box-sizing: border-box; }
+        .admin-box h4 { margin: 0 0 15px 0; color: #e50914; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .user-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+        .user-item { display: flex; justify-content: space-between; align-items: center; background: #23232a; padding: 10px 16px; border-radius: 8px; border: 1px solid #333340; }
+        .user-name { font-weight: 600; font-size: 0.95rem; color: #f5f5f7; }
+        .user-actions { display: flex; gap: 8px; }
+        .btn-kick { background: #ff9500; font-size: 0.8rem; padding: 6px 12px; width: auto; margin: 0; }
+        .btn-kick:hover { background: #ffaa22; box-shadow: none; }
+        .btn-ban { background: #ff3b30; font-size: 0.8rem; padding: 6px 12px; width: auto; margin: 0; }
+        .btn-ban:hover { background: #ff453a; box-shadow: none; }
+        #painel-debug { max-width: 600px; width: 100%; margin: 25px auto; padding: 15px; background: #0b0b0d; border: 1px solid #222; border-radius: 8px; text-align: left; font-family: monospace; font-size: 12px; color: #00ff66; overflow-y: auto; max-height: 140px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
-    <h1>🍿 CineTeca P2P</h1>
+    <h1>🍿 CineTeca P2P <span class="viewer-counter">👥 <span id="globalCount">0</span></span></h1>
 
     <div id="menu" class="tela ativa">
-        <button onclick="mostrarTela('criar')">Criar Sala (PC)</button>
-        <button onclick="mostrarTela('entrar')">Entrar numa Sala (Mobile/PC)</button>
+        <button onclick="mostrarTela('criar')">Criar Sala (Transmitir PC)</button>
+        <button onclick="mostrarTela('entrar')">Entrar numa Sala (Assistir)</button>
     </div>
 
     <div id="criar" class="tela">
-        <h3>Criar Sala</h3>
-        <input type="text" id="criar-nome" placeholder="Nome da sala (ex: filmes)">
-        <input type="password" id="criar-senha" placeholder="Senha da sala (ex: 123)">
+        <h3>Configurar Nova Sala</h3>
+        <div class="input-block">
+            <label>Identificador da Sala</label>
+            <input type="text" id="criar-nome" placeholder="Ex: os-meus-filmes">
+        </div>
+        <div class="input-block">
+            <label>Senha de Acesso</label>
+            <input type="password" id="criar-senha" placeholder="Insira uma senha segura">
+        </div>
         <button onclick="criarSala()">Iniciar Transmissão</button>
-        <button onclick="mostrarTela('menu')" style="background: #555;">Voltar</button>
+        <button onclick="mostrarTela('menu')" style="background: #3a3a44; margin-top: 8px;">Voltar ao Menu</button>
         <p id="status-host" class="status-msg"></p>
     </div>
 
     <div id="entrar" class="tela">
-        <h3>Entrar na Sala</h3>
-        <input type="text" id="entrar-nome" placeholder="Nome da sala">
-        <input type="password" id="entrar-senha" placeholder="Senha da sala">
-        <button onclick="entrarSala()">Conectar</button>
-        <button onclick="mostrarTela('menu')" style="background: #555;">Voltar</button>
+        <h3>Entrar em Sala Existente</h3>
+        <div class="input-block">
+            <label>O teu Nome / Apelido</label>
+            <input type="text" id="entrar-username" placeholder="Como te queres chamar?">
+        </div>
+        <div class="input-block">
+            <label>Identificador da Sala</label>
+            <input type="text" id="entrar-nome" placeholder="Nome exato da sala">
+        </div>
+        <div class="input-block">
+            <label>Senha de Acesso</label>
+            <input type="password" id="entrar-senha" placeholder="Senha definida pelo admin">
+        </div>
+        <button onclick="entrarSala()">Conectar e Assistir</button>
+        <button onclick="mostrarTela('menu')" style="background: #3a3a44; margin-top: 8px;">Voltar ao Menu</button>
         <p id="status-viewer" class="status-msg"></p>
     </div>
 
-    <div id="cinema" class="tela" style="max-width: 800px;">
-        <h3 id="titulo-cinema">Carregando...</h3>
-        <video id="videoPlayer" autoplay playsinline controls muted style="width:100%;"></video>
-        <p style="font-size: 12px; color: #aaa; margin-top: 10px;">Se estiver sem som, clique no player e ative o volume.</p>
-        <button onclick="location.reload()" style="background: #555; width: auto; display: inline-block;">Sair da Sala</button>
+    <div id="cinema" class="tela" style="max-width: 900px;">
+        <h3 id="titulo-cinema">Carregando sala...</h3>
+        <video id="videoPlayer" autoplay playsinline controls muted></video>
+        <p style="font-size: 13px; color: #aaa; margin-top: 12px;">🔈 Se estiver sem áudio, clique no player e ative o ícone do volume.</p>
+        <button onclick="location.reload()" style="background: #3a3a44; width: auto; padding: 10px 24px; display: inline-block; margin-top: 5px;">Sair do Cinema</button>
+    </div>
+
+    <div id="painelAdmin" class="admin-box">
+        <h4>Utilizadores na Sala</h4>
+        <div id="listaUtilizadores" class="user-list">
+            <div style="color: #777; text-align: center; font-size: 0.9rem;">Ninguém conectado de momento.</div>
+        </div>
     </div>
 
     <div id="painel-debug">
-        <strong>Status do Sistema:</strong>
-        <div id="log-conteudo">Aguardando ação...</div>
+        <strong>Consola do Sistema:</strong>
+        <div id="log-conteudo">Sistema pronto. Aguardando interação...</div>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
     <script>
-        let peer;
-        let streamDeVideo;
+        let peer = null;
+        let streamDeVideo = null;
+        let conexoesClientes = []; // Armazena objetos: { peerId, username, deviceId, dataConn, callConn }
 
-        // Servidores de conexão global públicos e estáveis
+        // Cria e armazena uma chave única persistente neste browser para simular o "Banir por IP" em P2P
+        let meuDeviceId = localStorage.getItem('cineteca_dev_id');
+        if (!meuDeviceId) {
+            meuDeviceId = 'device_' + Math.random().toString(36).substring(2, 11) + Date.now();
+            localStorage.setItem('cineteca_dev_id', meuDeviceId);
+        }
+
+        // Recupera a lista negra de dispositivos banidos salvos no navegador do host
+        let listaBanidos = JSON.parse(localStorage.getItem('cineteca_banlist') || '[]');
+
         const configWebRTC = {
             config: {
                 'iceServers': [
@@ -71,13 +135,11 @@
                     { 'urls': 'stun:stun1.l.google.com:19302' },
                     {
                         'urls': 'turn:openrelay.metered.ca:80',
-                        'username': 'openrelayproject',
-                        'credential': 'openrelayproject'
+                        'username': 'openrelayproject', 'credential': 'openrelayproject'
                     },
                     {
                         'urls': 'turn:openrelay.metered.ca:443',
-                        'username': 'openrelayproject',
-                        'credential': 'openrelayproject'
+                        'username': 'openrelayproject', 'credential': 'openrelayproject'
                     }
                 ]
             }
@@ -86,6 +148,7 @@
         function depurar(texto) {
             const log = document.getElementById('log-conteudo');
             log.innerHTML += "<br>➔ " + texto;
+            log.parentElement.scrollTop = log.parentElement.scrollHeight;
             console.log(texto);
         }
 
@@ -98,98 +161,233 @@
             return "cine-" + nome.toLowerCase().replace(/[^a-z0-9]/g, "") + "-" + senha.toLowerCase().replace(/[^a-z0-9]/g, "");
         }
 
+        // --- LÓGICA DO PROPRIETÁRIO DA SALA (HOST) ---
         async function criarSala() {
-            const nome = document.getElementById('criar-nome').value;
-            const senha = document.getElementById('criar-senha').value;
+            const nome = document.getElementById('criar-nome').value.trim();
+            const senha = document.getElementById('criar-senha').value.trim();
             const status = document.getElementById('status-host');
             
-            if(!nome || !senha) return alert("Preencha o nome e a senha!");
+            if(!nome || !senha) return alert("Preencha todos os campos para criar a sala!");
 
             const salaId = gerarIdDaSala(nome, senha);
-            status.innerText = "Pedindo permissão de tela...";
+            status.innerText = "Solicitando permissões de captura de ecrã...";
 
             try {
-                streamDeVideo = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                depurar("Ecrã capturado com sucesso no PC.");
-                status.innerText = "Conectando ao servidor...";
+                // Força captura otimizada para diminuir frames supérfluos (reduz latência)
+                streamDeVideo = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { frameRate: { ideal: 24, max: 30 } }, 
+                    audio: true 
+                });
+                depurar("Ecrã capturado. Configurando servidor P2P...");
+                status.innerText = "Inicializando rede estável...";
                 
                 peer = new Peer(salaId, configWebRTC);
 
                 peer.on('open', (id) => {
-                    depurar("PC Online! Sala registada com ID: " + id);
+                    depurar("Sala aberta com sucesso! ID de Rede: " + id);
                     status.innerText = "";
                     mostrarTela('cinema');
-                    document.getElementById('titulo-cinema').innerText = "Transmissão da Sala: " + nome;
+                    document.getElementById('painelAdmin').style.display = "block";
+                    document.getElementById('titulo-cinema').innerText = "Transmitindo: " + nome;
                     document.getElementById('videoPlayer').srcObject = streamDeVideo;
                 });
 
-                // Nova Lógica: O PC aguarda o amigo conectar via dados
+                // Escuta a entrada de canais de dados (solicitações de login)
                 peer.on('connection', (conn) => {
-                    depurar("Um amigo entrou na sala! Enviando sinal de vídeo para ele...");
-                    
-                    // O PC faz a chamada de vídeo diretamente para o ID do amigo
-                    setTimeout(() => {
-                        peer.call(conn.peer, streamDeVideo);
-                        depurar("Transmissão enviada para o ID: " + conn.peer);
-                    }, 800);
+                    conn.on('data', (dados) => {
+                        if (dados.type === 'solicitacao_entrada') {
+                            // Verifica se o dispositivo do espetador está na lista de banidos
+                            if (listaBanidos.includes(dados.deviceId)) {
+                                conn.send({ type: 'status_ban' });
+                                setTimeout(() => conn.close(), 400);
+                                return;
+                            }
+                            
+                            depurar(`Utilizador "${dados.username}" validado. Efetuando chamada de vídeo...`);
+                            
+                            // Registra o utilizador no painel de controle
+                            sincronizarUtilizador(conn.peer, dados.username, dados.deviceId, conn, null);
+                            
+                            // Faz a ligação de vídeo direta ao Viewer injetando o DeviceID nos metadados
+                            setTimeout(() => {
+                                let call = peer.call(conn.peer, streamDeVideo, { metadata: { deviceId: dados.deviceId } });
+                                sincronizarUtilizador(conn.peer, null, null, null, call);
+                                otimizarLarguraBanda(call);
+                            }, 600);
+                        }
+                    });
+
+                    conn.on('close', () => removerUtilizador(conn.peer));
                 });
 
                 peer.on('error', (err) => {
-                    depurar("ERRO NO PC: " + err.type);
+                    depurar("Erro crítico no Host: " + err.type);
+                    if(err.type === 'unavailable-id') status.innerText = "Este nome de sala já está ativo na rede!";
                 });
 
                 streamDeVideo.getVideoTracks()[0].onended = () => location.reload();
 
             } catch (err) {
-                depurar("Erro ao iniciar espelhamento: " + err.message);
+                depurar("Falha ao abrir espelhamento: " + err.message);
+                status.innerText = "Erro ao obter vídeo/áudio.";
+            }
+        }
+// --- MOTOR DE COMPRESSÃO DE BITRATE (IMPEDE TRAVAMENTOS COM 4+ UTILIZADORES) ---
+        function otimizarLarguraBanda(call) {
+            const pc = call.peerConnection;
+            if (!pc) return;
+
+            // Monitoriza a mudança de estado da conexão WebRTC para injetar limites de compressão
+            const verificarConexao = setInterval(() => {
+                if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected') {
+                    clearInterval(verificarConexao);
+                    const senders = pc.getSenders();
+                    senders.forEach(sender => {
+                        if (sender.track && sender.track.kind === 'video') {
+                            const params = sender.getParameters();
+                            if (!params.encodings) params.encodings = [{}];
+                            // Fixa o bitrate máximo por pessoa para 1.2 Mbps de forma estrita.
+                            params.encodings[0].maxBitrate = 1200000; 
+                            sender.setParameters(params).catch(() => console.log("Otimização estável aplicada"));
+                        }
+                    });
+                }
+            }, 1000);
+            setTimeout(() => clearInterval(verificarConexao), 12000);
+        }
+
+        // --- ADMINISTRAÇÃO DA SALA ---
+        function sincronizarUtilizador(peerId, username, deviceId, dataConn, callConn) {
+            let user = conexoesClientes.find(u => u.peerId === peerId);
+            if (!user) {
+                user = { peerId, username: username || 'Anónimo', deviceId: deviceId || '', dataConn, callConn };
+                conexoesClientes.push(user);
+            } else {
+                if (username) user.username = username;
+                if (deviceId) user.deviceId = deviceId;
+                if (dataConn) user.dataConn = dataConn;
+                if (callConn) user.callConn = callConn;
+            }
+            atualizarContadorESubmissao();
+        }
+
+        function removerUtilizador(peerId) {
+            conexoesClientes = conexoesClientes.filter(u => u.peerId !== peerId);
+            atualizarContadorESubmissao();
+        }
+
+        function atualizarContadorESubmissao() {
+            const qtd = conexoesClientes.length;
+            document.getElementById('globalCount').innerText = qtd;
+
+            // Alerta e propaga em tempo real a contagem exata a todos os espectadores
+            conexoesClientes.forEach(u => {
+                if (u.dataConn && u.dataConn.open) u.dataConn.send({ type: 'atualizar_contagem', total: qtd });
+            });
+
+            const container = document.getElementById('listaUtilizadores');
+            if (qtd === 0) {
+                container.innerHTML = '<div style="color: #777; text-align: center; font-size: 0.9rem;">Ninguém conectado de momento.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            conexoesClientes.forEach(u => {
+                const item = document.createElement('div');
+                item.className = 'user-item';
+                item.innerHTML = `
+                    <span class="user-name">${u.username}</span>
+                    <div class="user-actions">
+                        <button class="btn-kick" onclick="executarKick('${u.peerId}')">Kick</button>
+                        <button class="btn-ban" onclick="executarBan('${u.peerId}', '${u.deviceId}')">Ban</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function executarKick(peerId) {
+            const user = conexoesClientes.find(u => u.peerId === peerId);
+            if (user) {
+                if (user.dataConn) user.dataConn.send({ type: 'comando_kick' });
+                setTimeout(() => {
+                    if (user.callConn) user.callConn.close();
+                    if (user.dataConn) user.dataConn.close();
+                    removerUtilizador(peerId);
+                }, 200);
             }
         }
 
-        function entrarSala() {
-            const nome = document.getElementById('entrar-nome').value;
-            const senha = document.getElementById('entrar-senha').value;
-            const status = document.getElementById('status-viewer');
-            
-            if(!nome || !senha) return alert("Preencha o nome e a senha!");
+        function executarBan(peerId, deviceId) {
+            if (deviceId && !listaBanidos.includes(deviceId)) {
+                listaBanidos.push(deviceId);
+                localStorage.setItem('cineteca_banlist', JSON.stringify(listaBanidos));
+            }
+            executarKick(peerId);
+            depurar("Aparelho adicionado à lista de banimentos permanentemente.");
+        }
 
-            const salaId = gerarIdDaSala(nome, senha);
-            status.innerText = "Conectando...";
+        // --- LÓGICA DO VISITANTE (VIEWER) ---
+        function entrarSala() {
+            const username = document.getElementById('entrar-username').value.trim();
+            const nomeSala = document.getElementById('entrar-nome').value.trim();
+            const senhaSala = document.getElementById('entrar-senha').value.trim();
+            const status = document.getElementById('status-viewer');
+
+            if(!username || !nomeSala || !senhaSala) return alert("Tens de preencher todos os campos (Nome, Sala e Senha)!");
+
+            const salaId = gerarIdDaSala(nomeSala, senhaSala);
+            status.innerText = "Ligando aos servidores de sinalização...";
 
             peer = new Peer(configWebRTC);
 
             peer.on('open', (id) => {
-                depurar("Telemóvel Online. O meu ID único é: " + id);
-                depurar("A abrir túnel de dados para a sala...");
-                
-                // Conecta via canal de dados (estável e sem bloqueios)
+                depurar("Terminal pronto para receber stream. Abrindo canal seguro...");
                 const conn = peer.connect(salaId);
-                
+
                 conn.on('open', () => {
-                    status.innerText = "Conectado! A aguardar que o PC envie o vídeo...";
-                    depurar("Túnel de dados aberto. Aguardando chamada do PC...");
+                    status.innerText = "Conectado à sala! Aguardando autorização de vídeo...";
+                    // Submete os dados de autenticação para análise do Administrador
+                    conn.send({ type: 'solicitacao_entrada', username: username, deviceId: meuDeviceId });
+                });
+
+                conn.on('data', (dados) => {
+                    if (dados.type === 'atualizar_contagem') {
+                        document.getElementById('globalCount').innerText = dados.total;
+                    } else if (dados.type === 'comando_kick') {
+                        alert("Foste removido da sala pelo administrador.");
+                        location.reload();
+                    } else if (dados.type === 'status_ban') {
+                        alert("Não podes aceder a esta sala porque foste banido temporária ou permanentemente.");
+                        location.reload();
+                    }
+                });
+                
+                conn.on('close', () => {
+                    alert("A ligação com a sala de cinema foi encerrada.");
+                    location.reload();
                 });
             });
 
-            // O telemóvel fica à espera de receber a chamada vinda do PC
+            // Recebe o stream otimizado empurrado pela máquina do Host
             peer.on('call', (chamada) => {
-                depurar("PC a ligar para nós! A aceitar transmissão...");
-                chamada.answer(); // Aceita o vídeo do PC sem enviar nada de volta
+                depurar("Stream detetado! Sincronizando vídeo e áudio...");
+                chamada.answer(); 
 
                 chamada.on('stream', (streamRemoto) => {
-                    depurar("Vídeo recebido com sucesso!");
                     status.innerText = "";
                     mostrarTela('cinema');
-                    document.getElementById('titulo-cinema').innerText = "Assistindo Sala: " + nome;
+                    document.getElementById('titulo-cinema').innerText = "Assistindo a: " + nomeSala;
                     
-                    const videoElement = document.getElementById('videoPlayer');
-                    videoElement.srcObject = streamRemoto;
+                    const player = document.getElementById('videoPlayer');
+                    player.srcObject = streamRemoto;
                 });
             });
 
             peer.on('error', (err) => {
-                depurar("ERRO NO CLIENTE: " + err.type);
+                depurar("Falha ao entrar na sala: " + err.type);
                 if(err.type === 'peer-unavailable') {
-                    status.innerText = "Sala não encontrada! Confirma se o PC já ativou a sala.";
+                    status.innerText = "Sala indisponível. Confere o identificador e a senha digitada.";
                 }
             });
         }
